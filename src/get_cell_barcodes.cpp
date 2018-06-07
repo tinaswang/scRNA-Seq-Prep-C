@@ -1,21 +1,30 @@
-/**
-@file get_cell_barcodes.cpp
-@author Tina Wang
-@date 2018
-@copyright Figure this out later
-
-@brief
-Functions for getting cell barcodes for the 10x pipeline. 
-
-@section License
-cool shit to fill in later
-
-**/
-
 #include "get_cell_barcodes.hpp"
 KSEQ_INIT(gzFile, gzread)
 
 using namespace std;
+
+
+
+int umi_length = 10;
+// Change to 16 for v2
+// Length of the cell barcode
+int barcode_length = 14;
+// Number of threads
+int num_threads = 16;
+
+
+// Keeping track of barcodes to error-correct
+unordered_map<int, int> error_barcodes;
+
+// A reverse lookup for merging barcodes
+unordered_map<int, int> cw;
+
+// The set of all unique cell barcodes
+vector<int> codeword_set;
+
+// Set of all cell barcodes to correct
+vector<int> brc_to_correct;
+
 
 
 /*
@@ -40,11 +49,12 @@ vector<int> readBarcodes(string barcode_file)
     seq = kseq_init(fp);
     while ((l = kseq_read(seq)) >= 0) {        
         string sequence = seq->seq.s;
-        sequence = sequence.substr(0, BARCODE_LENGTH);
+        sequence = sequence.substr(0, barcode_length);
         barcodes.emplace_back(encode(sequence));
-       // cout << "seq: " << sequence << endl;
+
     }
-    // printf("return value: %d\n", l);
+
+
     kseq_destroy(seq);
     gzclose(fp);
     return barcodes;
@@ -150,7 +160,7 @@ string decode(int coded)
 	string decoded_letters[4] = {"A", "G", "C", "T"}; 
 	string decoded_sequence = "";
 	// Iterate through and decode all letters
-	for (int i = 0; i < BARCODE_LENGTH; i++)
+	for (int i = 0; i < barcode_length; i++)
 	{
 		int index = coded & 3;
 		coded >>= 2;
@@ -174,7 +184,7 @@ string decode(int coded)
  * @return unordered_map<string, float> counts
  *
  */
-vector<unordered_map<int, float>> getCounts(vector<vector<int>> barcodes)
+vector<unordered_map<int, float>> getCounts(vector<vector<int>> &barcodes)
 {
     vector<unordered_map<int, float>> all_counts;
 
@@ -204,6 +214,8 @@ vector<unordered_map<int, float>> getCounts(vector<vector<int>> barcodes)
     return all_counts;
 }
 
+
+
 /*
  * @func int getCounts(vector<int> barcodes)
  *
@@ -215,7 +227,7 @@ vector<unordered_map<int, float>> getCounts(vector<vector<int>> barcodes)
  * @return unordered_map<string, float> counts
  *
  */
-unordered_map<int, int> getAllCounts(vector<vector<int>> barcodes)
+unordered_map<int, int> getAllCounts(vector<vector<int>> &barcodes)
 {
     unordered_map<int, int> counts;
     
@@ -259,7 +271,7 @@ unordered_map<int, int> getAllCounts(vector<vector<int>> barcodes)
 
 // choose barcodes for error correction
 vector<int> chooseBarcodesToCorrect(
-                                unordered_map<int, int> counts,
+                                unordered_map<int, int> &counts,
                                 int expected, int precomputed)
 {
     std::vector<int> labels;
@@ -271,25 +283,23 @@ vector<int> chooseBarcodesToCorrect(
         labels.push_back(kv.first);
         vals.push_back(kv.second);  
     } 
-        // std::sort(vals.begin(), vals.end(), std::greater<>());
 
     sort(labels, vals, 0, (int) counts.size() - 1);
-    int exp_cells = (int) ((expected * 0.01) - 1);
 
+    int automatic = vals[(counts.size()) / 2];
+    int exp_cells = (int) ((expected * 0.01) - 1);
+    cout << "automatic: " << automatic << endl;
+    cout << "expected " << vals[exp_cells] / 10 << endl;
     cout << "Num of distinct barcodes: " << (int) vals.size() << endl;
 
     int num_barcodes = 0;
     int num_reads_in_barcodes = 0;
 
-    // cout << "Boundary: " << vals[exp_cells] / 10 << endl;
-
-
-    // cout << "expected: " << expected << endl;
-    // cout << "exp_cells: " << exp_cells << endl;
 
     for (int j = 0; j < (int) vals.size(); j++) 
     {
         if(vals[j] < vals[exp_cells] / 10)
+        // if (vals[j] < automatic)
         {
             num_barcodes = j;
             break;
@@ -300,7 +310,8 @@ vector<int> chooseBarcodesToCorrect(
             num_reads_in_barcodes += vals[j];
         }
     }
-    // cout << "vals[exp_cells]"<< vals[exp_cells] << endl;
+
+
     cout << "Num of barcodes: " << num_barcodes << endl;
     cout << "Num of reads in barcodes: " << num_reads_in_barcodes << endl;
 
@@ -308,14 +319,16 @@ vector<int> chooseBarcodesToCorrect(
     vector<int> codewords = labels;
     auto i = std::begin(codewords);
     int k = 0;
-    while (i != std::end(codewords)) {
+    while (i != std::end(codewords)) 
+    {
         if (k >= num_barcodes) 
             i = codewords.erase(i);
-        else {
+        else 
+        {
             ++i;
             k++;
-            }
         }
+    }
 
 
     return codewords;
@@ -323,10 +336,13 @@ vector<int> chooseBarcodesToCorrect(
 
 
 /* 
- * @func int is_far_enough(vector<int> barcodes, int i)
+ * @func int isFarEnough(vector<int> barcodes, int i)
+ * 
+ * @brief A helper function that does pairwise
+ *          comparison between two cell barcodes
  *
  */
-int is_far_enough(vector<int> codewords, int i, int dmin)
+int isFarEnough(vector<int> &codewords, int i, int dmin = 4)
 {
     vector<int> ret_vec;
     int d = dmin;
@@ -368,16 +384,15 @@ int is_far_enough(vector<int> codewords, int i, int dmin)
  *
  */
 
-vector<int> getErrorCorrectionBarcodes(vector<int> codewords, int dmin)
+vector<int> getErrorCorrectionBarcodes(vector<int> &codewords, int dmin)
 {
 
     vector<int> brc_idx_to_correct;
     vector<std::future<int>> holder;
     for (int i = 0; i < (int) codewords.size(); i++)
     {
-         holder.emplace_back(std::async(std::launch::async, 
-                                        is_far_enough, 
-                                        codewords, i, dmin));
+         holder.emplace_back(std::async(std::launch::async, isFarEnough, 
+                                        std::ref(codewords), i, dmin));
 
     }
 
@@ -394,108 +409,152 @@ vector<int> getErrorCorrectionBarcodes(vector<int> codewords, int dmin)
 
 
 
-/*
- * @func void write_to_files(vector<int> barcodes, 
- *                          vector<string> codewords, 
- *                          vector<int> brc_idx_to_correct)
+
+/* @brief Generate all strings 1 char away from our input s 
  *
- * @brief Write vectors to output files
- *          
- * @param barcodes -- a vector with all the barcodes
- *        codewords -- a vector with all the codes
- *         brc_idx_to_correct -- a vector of integers listing
- *                               locations where we need to correct
- *
- * @return None
- *
+ * @runtime O(4n), where n is the length of s
  */
-
-void write_to_files(vector<vector<int>> barcodes,     
-					vector<vector<int>> brc_idx_to_correct, int n)
+void fillHammingCircleMap(int barcode)
 {
-    // Write our barcodes to a file
-
-    for (int i = 0; i < n; i++)
+    string s = decode(barcode);
+    string alpha = "ACTG";
+    for (int i = 0; i < (int) s.length(); i++)
     {
-        vector<int> temp_barcodes = barcodes[i];
-        vector<int> temp_idx = brc_idx_to_correct[i];
-        // unordered_map<int, int> temp_counts = counts[i];
-
-
-        // order our counts first
-        vector<int> codewords;
-        codewords.reserve(temp_barcodes.size());
-
-        for (int j = 0; j < (int) temp_barcodes.size(); j++)
+        for (int j = 0; j < (int) alpha.length(); j++)
         {
-            codewords.push_back(temp_barcodes[j]);
+            string updated = s;
+            updated[i] = j;
+            int encoded = encode(updated);
+
+
+            error_barcodes[encoded] = barcode;
         }
 
-        if (i == 0)
-        {
-            ofstream output_file("barcodes.dat");
-            ostream_iterator<int> output_iterator(output_file, "\n");
-
-            copy(temp_barcodes.begin(), temp_barcodes.end(), output_iterator);
-
-            // Write codewords to another file
-            ofstream output_codes("codewords.dat");
-            ostream_iterator<int> output_iterator_2(output_codes, "\n");
-            copy(codewords.begin(), codewords.end(), output_iterator_2);
-
-            // Write indexes of barcodes to correct to a file
-            if ((int) brc_idx_to_correct.size() > 0)
-            {
-                ofstream idx_file("brc_idx_to_correct.dat");
-                ostream_iterator<int> output_iterator_3(idx_file, "\n");
-                copy(temp_idx.begin(), temp_idx.end(), output_iterator_3);
-            }
-        }
-
-        else
-        {
-
-            ofstream b_stream("barcodes.dat", 
-                                ios_base::app | ios_base::out);
-
-            if (b_stream.fail())
-            throw std::ios_base::failure(std::strerror(errno));
-
-            //make sure write fails with exception if something is wrong
-            b_stream.exceptions(b_stream.exceptions() | std::ios::failbit | std::ifstream::badbit);
-
-            for (const auto &e : temp_barcodes) b_stream << e << "\n";
-
-            // Write the decoded barcodes
-            ofstream c_stream("codewords.dat", 
-                                ios_base::app | ios_base::out);
-            for (const auto &e : codewords) c_stream << e << "\n";
-            if (c_stream.fail())
-            throw std::ios_base::failure(std::strerror(errno));
-
-            //make sure write fails with exception if something is wrong
-            c_stream.exceptions(c_stream.exceptions() | std::ios::failbit | std::ifstream::badbit);
-
-
-
-            // Last file
-            ofstream idx("brc_idx_to_correct.dat", 
-                        ios_base::app | ios_base::out);
-
-            if (idx.fail())
-            throw std::ios_base::failure(std::strerror(errno));
-
-            //make sure write fails with exception if something is wrong
-            idx.exceptions(idx.exceptions() | std::ios::failbit | std::ifstream::badbit);
-
-            for (const auto &e : temp_idx) idx << e << "\n";
-
-        }
     }
 }
 
 
-/* Helper functions */
+/* 
+ * @brief Returns all strings with 1-character difference from a barcode 
+ */
+
+vector<int> hammingCircle(int barcode)
+{
+    vector<int> neighbors;
+    string s = decode(barcode);
+    string alpha = "ACTG";
+    for (int i = 0; i < (int) s.length(); i++)
+    {
+        for (int j = 0; j < (int) alpha.length(); j++)
+        {
+            string updated = s;
+            updated[i] = j;
+            int encoded = encode(updated);
+            neighbors.push_back(encoded);
+        }
+
+    }
+
+    return neighbors;
+}
+
+/*
+ * @brief Loads data into various sets
+ */
+
+        
+
+void loadBarcodes(vector<int> &barcodes, vector<int> &codewords,
+                    vector<int> &brc_idx_to_correct)
+
+{
+    set<int> s;
+    int size = codewords.size();
+    for(int i = 0; i < (int) size; ++i) s.insert(codewords[i]);
+    codeword_set.assign( s.begin(), s.end() );
+
+    
+    vector<int> old_brc_to_correct;
+    size = brc_idx_to_correct.size();
+    for(int i = 0; i < (int) size; i++)
+    {
+        old_brc_to_correct.emplace_back(codewords[brc_idx_to_correct[i]]);
+    }
+
+    for (int id = 0; id < (int) size; id++)
+    {
+        cw[codewords[id]] = id;
+    }
+
+
+    set<int> s2;
+    for(int i = 0; i < (int) size; ++i) s2.insert(old_brc_to_correct[i]);
+    brc_to_correct.assign(s2.begin(), s2.end());
+
+
+    for(int i = 0; i < (int) brc_to_correct.size(); i++)
+    {
+        fillHammingCircleMap(brc_to_correct[i]);
+    }
+
+
+}
+
+
+/* 
+ * @func mergeBarcodes(vector<int> &codewords)
+ *
+ * @brief Merge the actual barcodes by looking up each barcode
+ *         and its neighbors
+ */
+vector<vector<int>> mergeBarcodes(vector<int> &codewords)
+{
+    int total = 0;
+    vector<vector<int>> retvec((int) codewords.size(), vector<int>(0));
+
+    for (int idx = 0; idx < (int) codewords.size(); idx++)
+    {
+
+
+        int barcode = codewords[idx];
+        vector<int>::iterator it = find(codeword_set.begin(), 
+                                            codeword_set.end(), barcode);
+
+
+        if (it != codeword_set.end())
+        {
+            (retvec[cw[barcode]]).emplace_back(idx);
+            total += 1;
+        }
+
+
+        else if (error_barcodes.find(codewords[idx]) != error_barcodes.end())
+        {
+            vector<int> neighbors = hammingCircle(barcode);
+            for (int i = 0; i < (int) neighbors.size(); i++)
+            {
+                int neighbor = neighbors[i];
+                if (error_barcodes.find(neighbor) != error_barcodes.end())
+                {
+                    (retvec[cw[barcode]]).emplace_back(idx);
+                    std::cout << "Entered new loop" << std::endl;
+                    total += 1;
+                }
+            }
+        }
+    }
+        std::cout << "Total number of reads after merging: " << total << std::endl;
+
+        return retvec;
+
+}
+
+
+
+
+
+
+/* Additional Helper functions */
 
 
 /**
@@ -508,21 +567,7 @@ void write_to_files(vector<vector<int>> barcodes,
  * @returns the highest index up to which list is sorted
  *
  *
- * algorithm: 
- *   int pivot = values[right]
- *   int i = left - 1
- *   // First, we need to rearrange the subarray in place.
- *   FOR j = left to right - 1 inclusive
- *       IF values[j] < pivot THEN
- *           i += 1
- *           swap (barcodes[i], barcodes[j])
- *       END IF
- *   END FOR
- *   IF A[hi] < A[i + 1] THEN
- *       swap (list[i + 1], list[right])
- *   END IF
- *   // Return the index for a new pivot
- *   RETURN (i + 1)
+ * 
  */
 
 int partition(vector<int> &barcodes, vector<float> &values,
@@ -577,11 +622,6 @@ int partition(vector<int> &barcodes, vector<float> &values,
  *   right: an integer indicating the rightmost 
  *          index of the list we are sorting
  * 
- *   IF left < right THEN
- *       int p = partition(barcodes, values, left, right)
- *       // Recursively quicksort the partitions
- *       quicksort_inplace(barcodes, values, left, p - 1 )
- *       quicksort_inplace(barcodes, values, p + 1, right)
  */
 
 void sort(vector<int> &barcodes, vector<float> &values, 
@@ -596,4 +636,12 @@ void sort(vector<int> &barcodes, vector<float> &values,
         sort(barcodes, values, p + 1, right);
     }
 }
+
+
+
+
+
+
+
+
 

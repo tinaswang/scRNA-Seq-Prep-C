@@ -16,9 +16,9 @@ Functions for obtaining
 #include <thread>
 #include <set>
 #include <iomanip>
-vector<int> hammingCircle(string s, int n);
 
-std::vector<int> mergeBarcodes(std::vector<int> codewords, 
-						  std::vector<int> barcode_chunk);
+
+vector<int> hammingCircle(string s, int n);
+std::vector<std::vector<int>> merge_barcodes(std::vector<int> &codewords)
 
 // void writeToOutput();

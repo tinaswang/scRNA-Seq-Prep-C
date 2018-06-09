@@ -13,6 +13,9 @@ int barcode_length = 14;
 int num_threads = 16;
 
 
+// umi barcodes
+vector<vector<int>> read_umis;
+
 // Keeping track of barcodes to error-correct
 unordered_map<int, int> error_barcodes;
 
@@ -28,7 +31,7 @@ vector<int> brc_to_correct;
 
 
 /*
- * @func vector<string> readBarcodes(string barcode_file)
+ * @func vector<string> readBarcodes(string barcode_file, int is_umi)
  *
  * @brief reads barcodes from a file
  *
@@ -38,6 +41,7 @@ vector<int> brc_to_correct;
  */
 vector<int> readBarcodes(string barcode_file)
 {
+    int length = barcode_length;
     cout << "Reading from: " << barcode_file << endl;
     vector<int> barcodes;
 
@@ -49,11 +53,10 @@ vector<int> readBarcodes(string barcode_file)
     seq = kseq_init(fp);
     while ((l = kseq_read(seq)) >= 0) {        
         string sequence = seq->seq.s;
-        sequence = sequence.substr(0, barcode_length);
+        sequence = sequence.substr(0, length);
         barcodes.emplace_back(encode(sequence));
 
     }
-
 
     kseq_destroy(seq);
     gzclose(fp);
@@ -188,7 +191,6 @@ vector<unordered_map<int, float>> getCounts(vector<vector<int>> &barcodes)
 {
     vector<unordered_map<int, float>> all_counts;
 
-
     // Iterate over the map using iterator
     for (int i = 0; i < (int) barcodes.size(); i++)
     {
@@ -283,9 +285,28 @@ vector<int> chooseBarcodesToCorrect(
         labels.push_back(kv.first);
         vals.push_back(kv.second);  
     } 
-
     sort(labels, vals, 0, (int) counts.size() - 1);
 
+    // Calculating mean and S.D. 
+    // https://stackoverflow.com/questions/7616511/calculate-mean-and-
+    // standard-deviation-from-a-vector-of-samples-in-c-using-boos
+
+    double sum = std::accumulate(vals.begin(), vals.end(), 0.0);
+    double mean = sum / vals.size();
+
+    vector<double> diff(vals.size());
+    transform(vals.begin(), vals.end(), diff.begin(),
+                   std::bind2nd(std::minus<double>(), mean));
+    double sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+    double stdev = std::sqrt(sq_sum / vals.size());
+
+    cout << "Average value of vals: " << (float) sum / (int) counts.size() << endl;
+    cout << "Stddev of vals: " << stdev << endl;
+
+    int num_items1 = std::count(vals.begin(), vals.end(), 1);
+    cout << "Number of times 1 appears: " << num_items1 << endl;
+
+    cout << "Size of vals: " << (int) counts.size() << endl;
     int automatic = vals[(counts.size()) / 2];
     int exp_cells = (int) ((expected * 0.01) - 1);
     cout << "automatic: " << automatic << endl;
@@ -426,7 +447,6 @@ void fillHammingCircleMap(int barcode)
             updated[i] = j;
             int encoded = encode(updated);
 
-
             error_barcodes[encoded] = barcode;
         }
 
@@ -497,6 +517,12 @@ void loadBarcodes(vector<int> &barcodes, vector<int> &codewords,
         fillHammingCircleMap(brc_to_correct[i]);
     }
 
+    // put all the umi barcodes in one place
+    // for (int i = 0; i < (int) read_files.size(); i++)
+    // {
+    //     vector<int> all_reads = readBarcodes(read_files[i], 1);
+    //     read_umis.push_back(read_files[i]);
+    // }
 
 }
 
@@ -528,7 +554,7 @@ vector<vector<int>> mergeBarcodes(vector<int> &codewords)
         }
 
 
-        else if (error_barcodes.find(codewords[idx]) != error_barcodes.end())
+        if (error_barcodes.find(barcode) != error_barcodes.end())
         {
             vector<int> neighbors = hammingCircle(barcode);
             for (int i = 0; i < (int) neighbors.size(); i++)
@@ -544,13 +570,63 @@ vector<vector<int>> mergeBarcodes(vector<int> &codewords)
         }
     }
         std::cout << "Total number of reads after merging: " << total << std::endl;
-
         return retvec;
 
 }
 
 
+/* 
+ * @brief helper function to help split large number of read files
+ * 
+ * Adapted from https://stackoverflow.com/questions/21426427/
+ *                                  handling-large-gzfile-in-c
+ */
 
+
+/* Split read files */
+void split_reads(vector<string> &read_files, vector<vector<int>> &retvec)
+{
+ 
+    // Now, read in the actual content of the files in a buffer
+    for (int i = 0; i < (int) read_files.size(); i++)
+    {
+        // string in = read_files[i];
+        // gzFile fp;
+        // fp = gzopen(in.c_str(), "r");
+
+        // char buf[1 << 20];
+        // char* offset = buf;
+
+        //   for (;;) {
+        //       int err, len = sizeof(buf)-(offset-buf);
+        //       if (len == 0) error("Buffer to small for input line lengths");
+
+        //       len = gzread(in, offset, len);
+
+        //       if (len == 0) break;    
+        //       if (len <  0) error(gzerror(in, &err));
+
+        //       char* cur = buf;
+        //       char* end = offset+len;
+
+        //       for (char* eol; (cur<end) && (eol = std::find(cur, end, '\n')) < end; cur = eol + 1)
+        //       {
+        //           std::cout << std::string(cur, eol) << "\n";
+        //       }
+
+        //       // any trailing data in [eol, end) now is a partial line
+        //       offset = std::copy(cur, end, buf);
+        //   }
+
+        //   // BIG CATCH: don't forget about trailing data without eol :)
+        //   std::cout << std::string(buf, offset);
+
+        //   if (gzclose(in) != Z_OK) error("failed gzclose");
+
+    }
+
+
+}
 
 
 

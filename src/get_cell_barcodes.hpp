@@ -15,10 +15,13 @@
 #include <thread>
 #include <set>
 #include <iomanip>
+#include <numeric>
+#include <errno.h>
 
 #include <zlib.h>
-extern "C" {
-#include "kseq.h"
+extern "C" 
+{
+	#include "kseq.h"
 }
 
 
@@ -72,3 +75,6 @@ std::vector<std::vector<int>> mergeBarcodes(std::vector<int> &codewords);
 
 void loadBarcodes(std::vector<int> &barcodes, std::vector<int> &codewords,
                     std::vector<int> &brc_idx_to_correct);
+
+void split_reads(std::vector<std::string> &read_files, 
+				std::vector<std::vector<int>> &retvec);

@@ -8,7 +8,7 @@ using namespace std;
 int umi_length = 10;
 // Change to 16 for v2
 // Length of the cell barcode
-int barcode_length = 14;
+int barcode_length = 16;
 // Number of threads
 int num_threads = 16;
 

@@ -9,11 +9,11 @@ Does everything except split the reads and create the kallisto input.
 
 Run the Makefile included
 
-Necessary dependencies:
+### Necessary dependencies:
 
 boost, zlib, GCC 5.3+
 
-Command line example:
+### Command line example:
 
 ```
 ./preprocess --dmin (dmin value) --expected (expected number of cells) --filepath 
@@ -23,7 +23,7 @@ Command line example:
 
 
 
-Allowed options:
+### For reference: Allowed options:
   -  [ --help ]         Load in the samples required
   -  [ --dmin ] arg     set dmin for each sample like --dmin 4 (4 is the default)
   -  [ --expected ] arg set expected number of cells, ex. --expected 5000

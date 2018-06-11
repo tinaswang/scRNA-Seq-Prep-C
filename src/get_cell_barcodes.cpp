@@ -563,7 +563,6 @@ vector<vector<int>> mergeBarcodes(vector<int> &codewords)
                 if (error_barcodes.find(neighbor) != error_barcodes.end())
                 {
                     (retvec[cw[barcode]]).emplace_back(idx);
-                    std::cout << "Entered new loop" << std::endl;
                     total += 1;
                 }
             }

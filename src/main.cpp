@@ -21,6 +21,7 @@ cool shit to fill in later
 using namespace std;
 using namespace boost::program_options;
 namespace po = boost::program_options;
+using namespace std::chrono;
 
 namespace fs = std::experimental::filesystem;
 
@@ -30,7 +31,10 @@ namespace
   const size_t SUCCESS = 0; 
   const size_t ERROR_UNHANDLED_EXCEPTION = 2; 
  
-} // namespace 
+} 
+
+
+
 /*
  * has_suffix(const std::string &str, const std::string &suffix)
  * @brief Check if a string has a certain given suffix
@@ -92,6 +96,8 @@ int main(int argc, char **argv)
                 unordered_map<int, int> counts;
                 vector<int> codewords;
 
+
+
                 for(auto& p: fs::recursive_directory_iterator(filepath))
                 {
                     if(has_suffix(p.path().filename(), "_R1_001.fastq.gz"))
@@ -124,34 +130,65 @@ int main(int argc, char **argv)
 
                 else
                 {
+                    high_resolution_clock::time_point start = high_resolution_clock::now();
 
+                    high_resolution_clock::time_point t1 = high_resolution_clock::now();
                     cout << "Reading in barcodes" << endl;
                     for (int i = 0; i < (int) barcode_files.size(); i++)
                     {
+
                         vector<int> codes = readBarcodes(barcode_files[i]);
                         barcodes.push_back(codes);
                     }
+                    high_resolution_clock::time_point t2 = high_resolution_clock::now();
+                    auto duration = duration_cast<microseconds>( t2 - t1 ).count();
+                    cout << "Time taken: " << duration << endl << endl;
 
-
-
+                    
                     cout << "Getting the raw barcode counts for each file: " << endl;
+                    t1 = high_resolution_clock::now();
                     counts = getAllCounts(barcodes);
                     // int total = (int) counts.size();
-
+                    t2 = high_resolution_clock::now();
+                    duration = duration_cast<microseconds>( t2 - t1 ).count();
+                    cout << "Time taken (microseconds): " << duration << endl << endl;
 
                     cout << "Choosing barcodes to correct" << endl;
+                    t1 = high_resolution_clock::now();
                     codewords = chooseBarcodesToCorrect(counts, expected, 0);
+                    t2 = high_resolution_clock::now();
+                    duration = duration_cast<microseconds>( t2 - t1 ).count();
+                    cout << "Time taken (microseconds): " << duration << endl << endl;
+
                     
-                    cout << "Getting error correction barcodes" << endl;
+                    cout << "Getting error correction barcodes w/ pairwise comparison" << endl;
+                    t1 = high_resolution_clock::now();
                     vector<int> to_correct = getErrorCorrectionBarcodes(codewords, dmin);
+                    t2 = high_resolution_clock::now();
+                    duration = duration_cast<microseconds>( t2 - t1 ).count();
+                    cout << "Time taken (microseconds): " << duration << endl << endl;
 
+                    cout << "Preparing for merge..." << endl;
+                    t1 = high_resolution_clock::now();
                     loadBarcodes(barcodes[j], codewords, to_correct);
+                    t2 = high_resolution_clock::now();
+                    duration = duration_cast<microseconds>( t2 - t1 ).count();
+                    cout << "Time taken (microseconds): " << duration << endl << endl;
 
+                    cout << "Merging barcodes" << endl;
+                    t1 = high_resolution_clock::now();
                     vector<vector<int>> all_merged = mergeBarcodes(codewords);
+                    t2 = high_resolution_clock::now();
+                    duration = duration_cast<microseconds>( t2 - t1 ).count();
+                    cout << "Time taken (microseconds): " << duration << endl << endl;
+
 
                     // All_merged contains all the correct barcodes -- now all
                     // we have to do is split the reads and match them up to the barcodes
 
+                    high_resolution_clock::time_point end = high_resolution_clock::now();
+                    duration = duration_cast<microseconds>(end - start).count();
+                    cout << "Total Time taken (microseconds): " << duration << endl;
                 }
             }
         }

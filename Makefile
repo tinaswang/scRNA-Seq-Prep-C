@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Wall -pedantic -ggdb -std=c++1z -g -O2
+CFLAGS = -Wall -pedantic -ggdb -std=c++11 -g -O2
 LFLAGS = -lboost_program_options
 LLFLAGS = -lstdc++fs -lpthread -lz
 SRC = src

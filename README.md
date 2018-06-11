@@ -11,7 +11,7 @@ Run the Makefile included
 
 Necessary dependencies:
 
-boost, zlib
+boost, zlib, GCC 5.3+
 
 Command line example:
 

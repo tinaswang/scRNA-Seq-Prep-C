@@ -5,7 +5,7 @@ This is a C++ version of <https://github.com/pachterlab/scRNA-Seq-TCC-prep/tree/
 
 Does everything except split the reads and create the kallisto input.
 
-HOW TO COMPILE AND RUN:
+## How to Compile and Run:
 
 Run the Makefile included
 
@@ -29,3 +29,5 @@ Allowed options:
   -  [ --expected ] arg set expected number of cells, ex. --expected 5000
   -  [ --filepath ] arg set input directories
 
+
+What's still left to do: read splitting, writing the results in individual .fastq and .umi files

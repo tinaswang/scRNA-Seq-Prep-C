@@ -23,11 +23,15 @@ boost, zlib, GCC 5.3+
 
 
 
-### For reference: Allowed options:
+### For reference: 
+
+Allowed options:
+
+```
   -  [ --help ]         Load in the samples required
   -  [ --dmin ] arg     set dmin for each sample like --dmin 4 (4 is the default)
   -  [ --expected ] arg set expected number of cells, ex. --expected 5000
   -  [ --filepath ] arg set input directories
-
+```
 
 What's still left to do: read splitting, writing the results in individual .fastq and .umi files

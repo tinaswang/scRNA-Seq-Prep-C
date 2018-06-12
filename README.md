@@ -11,7 +11,12 @@ Run the Makefile included
 
 ### Necessary dependencies:
 
-boost, zlib, GCC 5.3+
+boost, zlib, (experimental/filesystem has been removed)
+
+### Example Dataset:
+
+See the example dataset folder at <https://github.com/pachterlab/scRNA-Seq-TCC-prep/tree/10xTCCprep-SC3Pv2>. 
+
 
 ### Command line example:
 

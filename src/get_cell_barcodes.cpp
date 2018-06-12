@@ -4,16 +4,21 @@ KSEQ_INIT(gzFile, gzread)
 using namespace std;
 
 
-
+// Length of the UMI
 int umi_length = 10;
-// Change to 16 for v2
+
+// Change barcode_length to 16 for v2
+// It's set to 14 right now to run with 
+// the example datasets at 
+// https://github.com/pachterlab/scRNA-Seq-TCC-prep/tree/10xTCCprep-SC3Pv2
+
 // Length of the cell barcode
 int barcode_length = 14;
 // Number of threads
 int num_threads = 16;
 
 
-// umi barcodes
+// Collection of UMI barcodes: may or may not keep
 vector<vector<int>> read_umis;
 
 // Keeping track of barcodes to error-correct
@@ -362,13 +367,13 @@ vector<int> chooseBarcodesToCorrect(
  * @brief A helper function that does pairwise
  *          comparison between two cell barcodes
  *
+ * @returns the index i if we should keep the cell barcode
  */
 int isFarEnough(vector<int> &codewords, int i, int dmin)
 {
 
     int d = dmin;
-     // dmin = 100000;
-
+    dmin = 100000;
 
     string decoded = decode(codewords[i]);
     int j = (int) codewords.size() - 1;
@@ -392,34 +397,6 @@ int isFarEnough(vector<int> &codewords, int i, int dmin)
 
     return -1;
    
-    // int d = dmin;
-    // string decoded = decode(codewords[i]);
-    // vector<int> j_range;
-    // for (int k = 1; k <= i; k++)
-    // {
-    //     j_range.push_back(k);
-    // }
-
-    // for (int k = i+1; k <= (int) codewords.size(); k++)
-    // {
-    //     j_range.push_back(k);
-    // }
-
-    // while (dmin >= d && (int) j_range.size() > 0)
-    // {
-    //     // pop from j_range
-    //     int j = j_range[(int) j_range.size() - 1];
-    //     j_range.pop_back();
-    //     // compare between the hamming distance and dmin
-    //     dmin = min(dmin, getHammingDistance(decoded, decode(codewords[j])));
-    // }
-
-    // if (dmin >= d)
-    // {
-    //     return i;
-    // }
-
-    // return -1;
 }
 
 
@@ -430,7 +407,7 @@ int isFarEnough(vector<int> &codewords, int i, int dmin)
  *          
  * @param counts -- an unordered_map with barcode and count info
  *
- * @return a vector<int> of indices of barcodes to be removed
+ * @return a vector<int> of indices of barcodes to be error-corrected
  *
  */
 
@@ -510,22 +487,25 @@ vector<int> hammingCircle(int barcode)
     return neighbors;
 }
 
-/*
- * @brief Loads data into various sets
- */
 
-        
+
+
+/*
+ * @brief Loads data into various data sets
+ *
+ */
 
 void loadBarcodes(vector<int> &barcodes, vector<int> &codewords,
                     vector<int> &brc_idx_to_correct)
 
 {
+    // Fill codeword_set, which is the set of unique codewords
     set<int> s;
     int size = codewords.size();
     for(int i = 0; i < (int) size; ++i) s.insert(codewords[i]);
     codeword_set.assign( s.begin(), s.end() );
 
-    
+    // fill old_brc_to_correct, which is all codewords to error correct
     vector<int> old_brc_to_correct;
     size = brc_idx_to_correct.size();
     for(int i = 0; i < (int) size; i++)
@@ -533,28 +513,26 @@ void loadBarcodes(vector<int> &barcodes, vector<int> &codewords,
         old_brc_to_correct.emplace_back(codewords[brc_idx_to_correct[i]]);
     }
 
+    // cw is an unordered_map that's a reverse lookup for the original 
+    // index of a barcode given the barcode itself
     for (int id = 0; id < (int) size; id++)
     {
         cw[codewords[id]] = id;
     }
 
 
+    // fill brc_to_correct, which is all unique codewords in old_brc_to_correct
     set<int> s2;
     for(int i = 0; i < (int) size; ++i) s2.insert(old_brc_to_correct[i]);
     brc_to_correct.assign(s2.begin(), s2.end());
 
 
+    // Calculate all barcodes distance 1 away from everything 
+    // we want to error correct
     for(int i = 0; i < (int) brc_to_correct.size(); i++)
     {
         fillHammingCircleMap(brc_to_correct[i]);
     }
-
-    // put all the umi barcodes in one place
-    // for (int i = 0; i < (int) read_files.size(); i++)
-    // {
-    //     vector<int> all_reads = readBarcodes(read_files[i], 1);
-    //     read_umis.push_back(read_files[i]);
-    // }
 
 }
 
@@ -564,10 +542,16 @@ void loadBarcodes(vector<int> &barcodes, vector<int> &codewords,
  *
  * @brief Merge the actual barcodes by looking up each barcode
  *         and its neighbors
+ *
+ * @returns a vector that keeps track of which codewords are the same
+ *          as each other
  */
 vector<vector<int>> mergeBarcodes(vector<int> &codewords)
 {
     int total = 0;
+    // retvec[i] contains a vector with elements that are indices of
+    // codewords such that those corresponding codewords are all 
+    // in the same cell, codewords[i]
     vector<vector<int>> retvec((int) codewords.size(), vector<int>(0));
 
     for (int idx = 0; idx < (int) codewords.size(); idx++)
@@ -577,15 +561,15 @@ vector<vector<int>> mergeBarcodes(vector<int> &codewords)
         int barcode = codewords[idx];
         vector<int>::iterator it = find(codeword_set.begin(), 
                                             codeword_set.end(), barcode);
-
-
+        // If the barcode is already in brc_to_correct,
+        // then add its index to retvec[idx]
         if (it != brc_to_correct.end())
         {
             (retvec[cw[barcode]]).emplace_back(idx);
             total += 1;
         }
 
-
+        // Otherwise, if it's distance 1 away, also add it to retvec[idx]
         if (error_barcodes.find(barcode) != error_barcodes.end())
         {
             vector<int> neighbors = hammingCircle(barcode);
@@ -608,14 +592,7 @@ vector<vector<int>> mergeBarcodes(vector<int> &codewords)
 
 
 /* 
- * @brief helper function to help split large number of read files
- * 
- * Adapted from https://stackoverflow.com/questions/21426427/
- *                                  handling-large-gzfile-in-c
- */
-
-
-/* Split read files 
+ * @brief Split read files 
  * 
  * THIS IS INCOMPLETE 
  */

@@ -17,7 +17,7 @@ BIN = bin
 all: $(SRC)/main.cpp	$(SRC)/get_cell_barcodes.hpp \
 	$(SRC)/get_cell_barcodes.cpp 
 	$(CC) $(CFLAGS) $(SRC)/main.cpp $(LFLAGS) $(SRC)/get_cell_barcodes.hpp \
-	$(SRC)/get_cell_barcodes.cpp $(LLFLAGS) -o preprocess -lstdc++fs \
+	$(SRC)/get_cell_barcodes.cpp $(LLFLAGS) -o preprocess -lstdc++fs\
 	
 
 

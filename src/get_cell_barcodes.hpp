@@ -77,4 +77,6 @@ void loadBarcodes(std::vector<int> &barcodes, std::vector<int> &codewords,
                     std::vector<int> &brc_idx_to_correct);
 
 void split_reads(std::vector<std::string> &read_files, 
-				std::vector<std::vector<int>> &retvec);
+				std::vector<std::string> &barcode_files,
+				std::vector<int> &codewords,
+				std::vector<std::vector<int>> &retvec, std::string sample_name);

@@ -17,6 +17,8 @@ cool shit to fill in later
 #include <experimental/filesystem>
 #include <boost/program_options.hpp>
 #include <chrono>
+#include <dirent.h>
+#include <sys/types.h>
 
 using namespace std;
 using namespace boost::program_options;
@@ -53,7 +55,7 @@ int main(int argc, char **argv)
 
     try
     {
-        int dmin;
+        int dmin = 5;
         int expected;
         vector<string> filepath_vec;
         // int b_length;
@@ -74,8 +76,7 @@ int main(int argc, char **argv)
         store(parse_command_line(argc, argv, desc), vm);
         notify(vm);
 
-        bool test = ((vm.count("dmin") ==
-                vm.count("expected")) == vm.count("filepath"));
+        bool test = (vm.count("expected") == vm.count("filepath"));
 
 
         if (vm.count("help"))
@@ -97,19 +98,36 @@ int main(int argc, char **argv)
                 vector<int> codewords;
 
 
-
-                for(auto& p: fs::recursive_directory_iterator(filepath))
+                DIR* dirp = opendir(filepath.c_str());
+                struct dirent *dp;
+                if (dirp != NULL) 
                 {
-                    if(has_suffix(p.path().filename(), "_R1_001.fastq.gz"))
+                    /* print all the files and directories within directory */
+                    while ((dp = readdir(dirp)) != NULL)
                     {
-                        barcode_files.push_back(p.path());
+                        string name = dp->d_name;
+                        if(has_suffix(name, "_R1_001.fastq.gz"))
+                        {
+                            string abs_path = filepath + name;
+                            barcode_files.push_back(abs_path);
+                        }
+
+
+                        else if (has_suffix(dp->d_name, "_R2_001.fastq.gz"))
+                        {
+                            string abs_path = filepath + name;
+                            read_files.push_back(abs_path);
+                        }
                     }
 
-                    else if (has_suffix(p.path().filename(), "_R2_001.fastq.gz"))
-                    {
-                        read_files.push_back(p.path());
-                    }
+                    closedir (dirp);
+                }
 
+                else 
+                {
+                    /* could not open directory */
+                    perror ("");
+                    return EXIT_FAILURE;
                 }
 
                 string end = "_S1_L001_R1_001.fastq.gz";
@@ -189,6 +207,7 @@ int main(int argc, char **argv)
                     high_resolution_clock::time_point end = high_resolution_clock::now();
                     duration = duration_cast<microseconds>(end - start).count();
                     cout << "Total Time taken (microseconds): " << duration << endl;
+
                 }
             }
         }

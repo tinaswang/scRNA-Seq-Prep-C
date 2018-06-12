@@ -8,7 +8,7 @@ using namespace std;
 int umi_length = 10;
 // Change to 16 for v2
 // Length of the cell barcode
-int barcode_length = 16;
+int barcode_length = 14;
 // Number of threads
 int num_threads = 16;
 
@@ -307,9 +307,9 @@ vector<int> chooseBarcodesToCorrect(
     cout << "Number of times 1 appears: " << num_items1 << endl;
 
     cout << "Size of vals: " << (int) counts.size() << endl;
-    int automatic = vals[(counts.size()) / 2];
+    // int automatic = vals[(counts.size()) / 2];
     int exp_cells = (int) ((expected * 0.01) - 1);
-    cout << "automatic: " << automatic << endl;
+    // cout << "automatic: " << automatic << endl;
     cout << "expected " << vals[exp_cells] / 10 << endl;
     cout << "Num of distinct barcodes: " << (int) vals.size() << endl;
 
@@ -363,12 +363,13 @@ vector<int> chooseBarcodesToCorrect(
  *          comparison between two cell barcodes
  *
  */
-int isFarEnough(vector<int> &codewords, int i, int dmin = 4)
+int isFarEnough(vector<int> &codewords, int i, int dmin)
 {
-    vector<int> ret_vec;
-    int d = dmin;
 
-    dmin = d;
+    int d = dmin;
+     // dmin = 100000;
+
+
     string decoded = decode(codewords[i]);
     int j = (int) codewords.size() - 1;
 
@@ -391,6 +392,34 @@ int isFarEnough(vector<int> &codewords, int i, int dmin = 4)
 
     return -1;
    
+    // int d = dmin;
+    // string decoded = decode(codewords[i]);
+    // vector<int> j_range;
+    // for (int k = 1; k <= i; k++)
+    // {
+    //     j_range.push_back(k);
+    // }
+
+    // for (int k = i+1; k <= (int) codewords.size(); k++)
+    // {
+    //     j_range.push_back(k);
+    // }
+
+    // while (dmin >= d && (int) j_range.size() > 0)
+    // {
+    //     // pop from j_range
+    //     int j = j_range[(int) j_range.size() - 1];
+    //     j_range.pop_back();
+    //     // compare between the hamming distance and dmin
+    //     dmin = min(dmin, getHammingDistance(decoded, decode(codewords[j])));
+    // }
+
+    // if (dmin >= d)
+    // {
+    //     return i;
+    // }
+
+    // return -1;
 }
 
 
@@ -416,6 +445,7 @@ vector<int> getErrorCorrectionBarcodes(vector<int> &codewords, int dmin)
                                         std::ref(codewords), i, dmin));
 
     }
+    cout << "size of holder: " << holder.size() << endl;
 
     for (auto& f : holder)
     {
@@ -424,9 +454,11 @@ vector<int> getErrorCorrectionBarcodes(vector<int> &codewords, int dmin)
             brc_idx_to_correct.emplace_back(result);
     }
 
+
     cout << "Number of barcodes to correct: " << (int) brc_idx_to_correct.size() << endl;
     return brc_idx_to_correct;
 }
+
 
 
 
@@ -547,7 +579,7 @@ vector<vector<int>> mergeBarcodes(vector<int> &codewords)
                                             codeword_set.end(), barcode);
 
 
-        if (it != codeword_set.end())
+        if (it != brc_to_correct.end())
         {
             (retvec[cw[barcode]]).emplace_back(idx);
             total += 1;
@@ -574,6 +606,7 @@ vector<vector<int>> mergeBarcodes(vector<int> &codewords)
 }
 
 
+
 /* 
  * @brief helper function to help split large number of read files
  * 
@@ -582,46 +615,87 @@ vector<vector<int>> mergeBarcodes(vector<int> &codewords)
  */
 
 
-/* Split read files */
-void split_reads(vector<string> &read_files, vector<vector<int>> &retvec)
+/* Split read files 
+ * 
+ * THIS IS INCOMPLETE 
+ */
+void split_reads(vector<string> &read_files, vector<string> &barcode_files, 
+                    vector<int> &codewords,
+                    vector<vector<int>> &retvec, string sample_name)
 {
- 
+    int n_files = 500;
+    // int tot = (int) codewords.size() * 4;
+
+    // int li = tot / n_files;
+    // li = li - (li % 4) + 4;
     // Now, read in the actual content of the files in a buffer
+
     for (int i = 0; i < (int) read_files.size(); i++)
     {
-        // string in = read_files[i];
-        // gzFile fp;
-        // fp = gzopen(in.c_str(), "r");
+        string in = read_files[i];
+        gzFile fh = gzopen(in.c_str(), "rb");
 
-        // char buf[1 << 20];
-        // char* offset = buf;
+        char buf[1024];
+        char *line;
 
-        //   for (;;) {
-        //       int err, len = sizeof(buf)-(offset-buf);
-        //       if (len == 0) error("Buffer to small for input line lengths");
+        vector<string> all_reads; 
+        // int line_num = 1;
+        // int index = 0;
+        while ((line = gzgets(fh, buf, sizeof(buf))) != NULL) 
+        {
+            all_reads.emplace_back(line);
+        
+        }
 
-        //       len = gzread(in, offset, len);
+        gzclose(fh);
 
-        //       if (len == 0) break;    
-        //       if (len <  0) error(gzerror(in, &err));
+    }
 
-        //       char* cur = buf;
-        //       char* end = offset+len;
+    vector<string> all_reads_umi;
+    for (int i = 0; i < (int) barcode_files.size(); i++)
+    {
+        string in = barcode_files[i];
+        gzFile fh = gzopen(in.c_str(), "rb");
 
-        //       for (char* eol; (cur<end) && (eol = std::find(cur, end, '\n')) < end; cur = eol + 1)
-        //       {
-        //           std::cout << std::string(cur, eol) << "\n";
-        //       }
+        char buf[1024];
+        char *line;
 
-        //       // any trailing data in [eol, end) now is a partial line
-        //       offset = std::copy(cur, end, buf);
-        //   }
+        vector<string> all_reads; 
+        // int line_num = 1;
+        // int index = 0;
+        while ((line = gzgets(fh, buf, sizeof(buf))) != NULL) 
+        {
+            all_reads_umi.emplace_back(line);
+        
+        }
 
-        //   // BIG CATCH: don't forget about trailing data without eol :)
-        //   std::cout << std::string(buf, offset);
+        gzclose(fh);
 
-        //   if (gzclose(in) != Z_OK) error("failed gzclose");
+    }
+    // map each UMI to its codeword and write to corresponding file
+    // for the codeword
+    for (int cell = 0; cell < (int) codewords.size(); cell++)
+    {
+        if (!retvec[cell].empty())
+        {
+            vector <string> output_fastqs;
+            vector <string> output_umis;
+            for (int i = 0; i < (int) (retvec[cell]).size(); i++)
+            {
+                int dup = (retvec[cell])[i];
 
+                int min_index = 4 * dup;
+
+                for (int j = min_index; j < min_index + 4; j++)
+                {
+                    output_fastqs.push_back(all_reads[j]);
+                }
+               //  output_umis+=ln.getline(ALL_reads_file_umi[fi],adjusted_4i+2)[BARCODE_LENGTH:BARCODE_LENGTH+UMI_LENGTH]+"\n"
+                string filename = sample_name + "_" + std::to_string(cell);
+                filename = filename + "_" + decode(codewords[cell]);
+
+            }
+        }
     }
 
 
